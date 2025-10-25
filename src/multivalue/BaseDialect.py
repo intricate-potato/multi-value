@@ -167,9 +167,16 @@ class BaseDialect(object):
     def __str__(self):
         return self.dialect_name
 
+    # def relatavize_file(self, file_name):
+    #     dirname = os.path.dirname(__file__)
+    #     return os.path.join(dirname, "./", file_name)
+    
     def relatavize_file(self, file_name):
+        # Get directory of this file: src/multivalue/
         dirname = os.path.dirname(__file__)
-        return os.path.join(dirname, "./", file_name)
+        # Go up two levels to repo root: src/multivalue/ -> src/ -> repo_root/
+        repo_root = os.path.dirname(os.path.dirname(dirname))
+        return os.path.join(repo_root, file_name)
 
     def set_seed(self, seed):
         random.seed(seed)
