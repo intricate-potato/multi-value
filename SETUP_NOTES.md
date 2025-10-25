@@ -1,4 +1,3 @@
-```markdown
 # Multi-VALUE Setup Notes
 Disclaimer: This note is AI-generated, summerizing the necessary tweaks required for correctly running the tool on my local machine.
 
