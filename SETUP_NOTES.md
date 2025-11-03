@@ -55,6 +55,14 @@ This downloads:
 - spaCy English model (en_core_web_sm-3.7.1)
 - NLTK corpora (wordnet, cmudict)
 
+But there was some issue with the download. So I changed the downlaod to bash with the follwing to downlaod `spaCy`
+
+```bash
+pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
+
+python -c "import spacy; spacy.load('en_core_web_sm'); print('OK')"
+```
+
 ### 6. Apply Critical Code Fix (MANDATORY)
 **Without this fix, the package will not work.**
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Transform posts CSV to different dialects
+Transform posts CSV to different dialects with detailed tracking
 Usage: python transform_posts.py <dialect_name>
 Example: python transform_posts.py AfricanAmericanVernacular
 """
@@ -19,36 +19,6 @@ def preprocess_text(text):
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
-def transform_without_coref(dialect, text):
-    """Transform text bypassing coref cluster creation"""
-    # Directly call update and skip coref
-    dialect.string = text
-    dialect.doc = dialect.nlp(text)
-    dialect.tokens = [tok for tok in dialect.doc]
-    dialect.end_idx = len(dialect.tokens)
-    
-    # Set empty coref clusters to bypass validation
-    dialect.coref_clusters = []
-    
-    # Now run transformation rules (this varies by dialect)
-    # Call the dialect's specific transformation methods
-    # For most dialects, just compile from rules after running methods
-    
-    # Run morphosyntax transformations if enabled
-    if dialect.morphosyntax:
-        # This calls all the dialect-specific transformation rules
-        for rule_method in dir(dialect):
-            if not rule_method.startswith('_') and callable(getattr(dialect, rule_method)):
-                method = getattr(dialect, rule_method)
-                # Check if it's a transformation method (no parameters)
-                try:
-                    if 'self' in method.__code__.co_varnames[:1]:
-                        method()
-                except:
-                    pass
-    
-    return dialect.surface_fix_spacing(dialect.compile_from_rules())
-
 def main():
     if len(sys.argv) != 2:
         print("Usage: python transform_posts.py <dialect_name>")
@@ -63,54 +33,69 @@ def main():
     dialect_class = getattr(Dialects, dialect_name)
     dialect = dialect_class()
     
-    final_transformed_column = []
-    total_posts = 0
-    skipped_posts = 0
+    # Store results for each individual post
+    results = []
+    skipped = 0
     
-    for index, row in df.iterrows():
+    for user_idx, row in df.iterrows():
         post_list_as_string = row['Post']
+        label = row['Label']
         
         try:
             original_posts = ast.literal_eval(post_list_as_string)
-            transformed_posts_in_row = []
             
             for single_post in original_posts:
-                total_posts += 1
                 try:
-                    cleaned_post = preprocess_text(single_post)
+                    # Preprocess
+                    preprocessed = preprocess_text(single_post)
                     
-                    # Try standard transform first
+                    # Transform with fallback
                     try:
-                        transformed = dialect.transform(cleaned_post)
+                        transformed = dialect.transform(preprocessed)
+                        rules_applied = str(dialect.executed_rules)
                     except AssertionError:
-                        # If coref validation fails, use bypass method
-                        transformed = transform_without_coref(dialect, cleaned_post)
+                        # Coref validation failed - keep original
+                        transformed = preprocessed
+                        rules_applied = "SKIPPED: Tokenization mismatch"
+                        skipped += 1
                     
-                    transformed_posts_in_row.append(transformed)
+                    # Store result
+                    results.append({
+                        'User': f'User_{user_idx}',
+                        'Label': label,
+                        'Original_Post': single_post,
+                        'Preprocessed_SAE': preprocessed,
+                        f'{dialect_name}_Prompt': transformed,
+                        'Rules_Applied': rules_applied
+                    })
                     
                 except Exception as e:
-                    transformed_posts_in_row.append(single_post)
-                    skipped_posts += 1
-                    print(f"Skipped post in row {index}: {str(e)[:70]}")
-            
-            final_transformed_column.append(transformed_posts_in_row)
-
-        except (ValueError, SyntaxError):
-            print(f"Could not parse row {index}")
-            final_transformed_column.append(post_list_as_string)
-
-    output_df = pd.DataFrame({
-        'Post': final_transformed_column,
-        'Label': df['Label']
-    })
+                    # Other errors - keep original
+                    results.append({
+                        'User': f'User_{user_idx}',
+                        'Label': label,
+                        'Original_Post': single_post,
+                        'Preprocessed_SAE': preprocess_text(single_post),
+                        f'{dialect_name}_Prompt': single_post,
+                        'Rules_Applied': f"ERROR: {str(e)[:50]}"
+                    })
+                    skipped += 1
+        
+        except (ValueError, SyntaxError) as e:
+            print(f"Could not parse row {user_idx}: {e}")
     
-    output_path = f'posts_{dialect_name}.csv'
+    # Create output dataframe
+    output_df = pd.DataFrame(results)
+    
+    # Save
+    output_path = f'posts_{dialect_name}_detailed.csv'
     output_df.to_csv(output_path, index=False)
     
-    print("-" * 30)
+    print("-" * 40)
     print(f"Saved to {output_path}")
-    print(f"Processed: {total_posts - skipped_posts}/{total_posts}")
-    print(f"Skipped: {skipped_posts}")
+    print(f"Total posts: {len(results)}")
+    print(f"Successfully transformed: {len(results) - skipped}")
+    print(f"Skipped/Failed: {skipped}")
 
 if __name__ == "__main__":
     main()
